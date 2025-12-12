@@ -124,35 +124,29 @@ jobs:
           MEETING_DATE: ${{ needs.check-if-meeting-week.outputs.meeting_date }}
         run: |
           BRANCH="agenda-$MEETING_DATE"
-          
+
           # Check if PR already exists
           EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
-          
+
           if [ -z "$EXISTING_PR" ]; then
-            # Create PR body (indentation will be stripped by sed)
-            PR_BODY=$(cat << 'EOF' | sed 's/^            //'
-            ## Auto-generated Meeting Agenda
-
-            This PR contains the auto-generated agenda for the community meeting.
-
-            ### Before the meeting:
-            - [ ] Add the **focus topic** for this meeting
-            - [ ] Update the **upcoming events** section
-            - [ ] Add any **demos** to the queue
-            - [ ] Review and adjust **action items** from last meeting
-            - [ ] Add any **shoutouts** for contributors
-
-            ### How to add items:
-            Edit the agenda file directly in this PR, or comment below with items to add.
-
-            ---
-            *This agenda was automatically generated from GitHub activity across KubeStellar repos.*
-            EOF
-            )
-          
             gh pr create \
               --title "📋 Community Meeting Agenda: $MEETING_DATE" \
-              --body "$PR_BODY" \
+              --body "## Auto-generated Meeting Agenda
+
+          This PR contains the auto-generated agenda for the community meeting.
+
+          ### Before the meeting:
+          - [ ] Add the **focus topic** for this meeting
+          - [ ] Update the **upcoming events** section
+          - [ ] Add any **demos** to the queue
+          - [ ] Review and adjust **action items** from last meeting
+          - [ ] Add any **shoutouts** for contributors
+
+          ### How to add items:
+          Edit the agenda file directly in this PR, or comment below with items to add.
+
+          ---
+          *This agenda was automatically generated from GitHub activity across KubeStellar repos.*" \
               --label "meeting" \
               --label "agenda" \
               --assignee "${{ github.actor }}"
