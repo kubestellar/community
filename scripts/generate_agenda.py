@@ -97,7 +97,8 @@ class AgendaGenerator:
         prs = []
         try:
             repo = self.gh.get_repo(repo_name)
-            for pr in repo.get_pulls(state="closed", sort="updated", direction="desc"):
+            # Limit to first 50 PRs to avoid long API calls
+            for pr in list(repo.get_pulls(state="closed", sort="updated", direction="desc")[:50]):
                 if pr.merged_at and pr.merged_at.replace(tzinfo=None) > self.lookback_date:
                     prs.append(PRInfo(
                         number=pr.number,
@@ -118,7 +119,8 @@ class AgendaGenerator:
         prs = []
         try:
             repo = self.gh.get_repo(repo_name)
-            for pr in repo.get_pulls(state="open", sort="created", direction="desc"):
+            # Limit to first 30 open PRs
+            for pr in list(repo.get_pulls(state="open", sort="created", direction="desc")[:30]):
                 days_open = (datetime.now() - pr.created_at.replace(tzinfo=None)).days
                 if days_open >= 3:  # Only show PRs open for 3+ days
                     prs.append(PRInfo(
@@ -174,14 +176,14 @@ class AgendaGenerator:
         score = 0
         try:
             repo = self.gh.get_repo(repo_name)
-            # Count recent PRs (open + merged)
-            for pr in repo.get_pulls(state="all", sort="updated", direction="desc")[:50]:
+            # Count recent PRs (open + merged) - limit to 30
+            for pr in list(repo.get_pulls(state="all", sort="updated", direction="desc")[:30]):
                 if pr.updated_at.replace(tzinfo=None) > self.lookback_date:
                     score += 1
                 else:
                     break
-            # Count recent issues
-            for issue in repo.get_issues(state="all", sort="updated", direction="desc")[:50]:
+            # Count recent issues - limit to 30
+            for issue in list(repo.get_issues(state="all", sort="updated", direction="desc")[:30]):
                 if not issue.pull_request and issue.updated_at.replace(tzinfo=None) > self.lookback_date:
                     score += 1
                 elif issue.updated_at.replace(tzinfo=None) < self.lookback_date:
@@ -195,8 +197,8 @@ class AgendaGenerator:
         issues = []
         try:
             repo = self.gh.get_repo(repo_name)
-            # Get open issues sorted by comments (most discussed)
-            for issue in repo.get_issues(state="open", sort="comments", direction="desc")[:20]:
+            # Get open issues sorted by comments (most discussed) - limit to 20
+            for issue in list(repo.get_issues(state="open", sort="comments", direction="desc")[:20]):
                 if issue.pull_request:
                     continue  # Skip PRs
                 # Prioritize issues with recent activity

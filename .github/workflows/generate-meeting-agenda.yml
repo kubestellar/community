@@ -89,15 +89,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MEETING_DATE: ${{ needs.check-if-meeting-week.outputs.meeting_date }}
         run: |
+          mkdir -p meetings
           python scripts/generate_agenda.py \
             --meeting-date "$MEETING_DATE" \
             --token "$GITHUB_TOKEN" \
-            --output "meetings/$(echo $MEETING_DATE | tr '-' '').md"
+            --output "meetings/$(echo $MEETING_DATE | tr -d '-').md"
       
       - name: Create or update agenda file
         run: |
           MEETING_DATE="${{ needs.check-if-meeting-week.outputs.meeting_date }}"
-          AGENDA_FILE="meetings/$(echo $MEETING_DATE | tr '-' '').md"
+          AGENDA_FILE="meetings/$(echo $MEETING_DATE | tr -d '-').md"
           
           # Ensure meetings directory exists
           mkdir -p meetings
