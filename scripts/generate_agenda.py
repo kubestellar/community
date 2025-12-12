@@ -23,13 +23,13 @@ from typing import List, Optional
 import argparse
 
 try:
-    from github import Github
+    from github import Github, Auth
     from dateutil import parser as date_parser
 except ImportError:
     print("Installing required packages...")
     import subprocess
     subprocess.run(["pip", "install", "PyGithub", "python-dateutil", "--break-system-packages"])
-    from github import Github
+    from github import Github, Auth
     from dateutil import parser as date_parser
 
 
@@ -47,7 +47,7 @@ CONFIG = {
     "max_issues_to_show": 5,
     "max_discussions_to_show": 5,
     "meeting_time": "10AM ET",
-    "meeting_link": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZGU2MTA5NWEtZTVmNy00MzhhLWE1M2QtMmM3ZTMxY2ZmZDIy%40thread.v2/0?context=%7b%22Tid%22%3a%22fcf67057-50c9-4ad4-98f3-ffca64add9e9%22%2c%22Oid%22%3a%22ad1e0738-3ae4-4003-bc34-5c1c9ade2f83%22%7d",
+    "meeting_link": "https://teams.microsoft.com/l/meetup-join/...",
     "youtube_link": "https://kubestellar.io/tv",
     "slack_channel": "https://cloud-native.slack.com/archives/C097094RZ3M",
 }
@@ -86,7 +86,10 @@ class DiscussionInfo:
 
 class AgendaGenerator:
     def __init__(self, github_token: Optional[str] = None):
-        self.gh = Github(github_token) if github_token else Github()
+        if github_token:
+            self.gh = Github(auth=Auth.Token(github_token))
+        else:
+            self.gh = Github()
         self.lookback_date = datetime.now() - timedelta(days=CONFIG["lookback_days"])
         
     def get_merged_prs(self, repo_name: str) -> List[PRInfo]:
