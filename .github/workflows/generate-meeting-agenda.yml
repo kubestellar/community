@@ -131,7 +131,14 @@ jobs:
           if [ -z "$EXISTING_PR" ]; then
             gh pr create \
               --title "📋 Community Meeting Agenda: $MEETING_DATE" \
-              --body "## Auto-generated Meeting Agenda
+              --body "# KubeStellar Community Meeting
+          ## 📅 $MEETING_DATE | 10AM ET | ⏱️ 30 min
+
+          [Join](https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZGU2MTA5NWEtZTVmNy00MzhhLWE1M2QtMmM3ZTMxY2ZmZDIy%40thread.v2/0?context=%7b%22Tid%22%3a%22fcf67057-50c9-4ad4-98f3-ffca64add9e9%22%2c%22Oid%22%3a%22ad1e0738-3ae4-4003-bc34-5c1c9ade2f83%22%7d) | [YouTube](https://kubestellar.io/tv) | [Slack](https://cloud-native.slack.com/archives/C097094RZ3M)
+
+          ---
+
+          ## Auto-generated Meeting Agenda
 
           This PR contains the auto-generated agenda for the community meeting.
 
