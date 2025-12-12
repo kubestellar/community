@@ -47,7 +47,7 @@ CONFIG = {
     "max_issues_to_show": 5,
     "max_discussions_to_show": 5,
     "meeting_time": "10AM ET",
-    "meeting_link": "https://teams.microsoft.com/l/meetup-join/...",
+    "meeting_link": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZGU2MTA5NWEtZTVmNy00MzhhLWE1M2QtMmM3ZTMxY2ZmZDIy%40thread.v2/0?context=%7b%22Tid%22%3a%22fcf67057-50c9-4ad4-98f3-ffca64add9e9%22%2c%22Oid%22%3a%22ad1e0738-3ae4-4003-bc34-5c1c9ade2f83%22%7d",
     "youtube_link": "https://kubestellar.io/tv",
     "slack_channel": "https://cloud-native.slack.com/archives/C097094RZ3M",
 }
@@ -305,29 +305,29 @@ class AgendaGenerator:
         
         # Build attention table - only most urgent items (max 5)
         attention_items = []
-        
+
         # Add stale PRs (>7 days)
         for pr in open_prs[:3]:
             if pr.days_open >= 7:
                 urgency = "🟠" if pr.days_open < 14 else "🔴"
                 attention_items.append(
-                    f"| [PR #{pr.number}]({pr.url}) | {urgency} Open {pr.days_open}d | @{pr.author} |"
+                    f"| [PR #{pr.number}]({pr.url}) | {pr.title} | {urgency} Open {pr.days_open}d | @{pr.author} |"
                 )
-        
+
         # Add breaking changes from merged
         for pr in merged_prs[:2]:
             if any(l in ["breaking-change", "major"] for l in pr.labels):
                 attention_items.append(
-                    f"| [PR #{pr.number}]({pr.url}) | 🚨 Breaking change merged | @{pr.author} |"
+                    f"| [PR #{pr.number}]({pr.url}) | {pr.title} | 🚨 Breaking change merged | @{pr.author} |"
                 )
-        
+
         # Add help wanted
         for issue in help_wanted[:2]:
             attention_items.append(
-                f"| [#{issue.number}]({issue.url}) | 🆘 Help wanted | - |"
+                f"| [#{issue.number}]({issue.url}) | {issue.title} | 🆘 Help wanted | - |"
             )
-        
-        attention_table = "\n".join(attention_items[:5]) if attention_items else "| ✅ | All clear this sprint! | - |"
+
+        attention_table = "\n".join(attention_items[:5]) if attention_items else "| ✅ | All clear this sprint! | - | - |"
         
         # Build discussion topics from top repos
         discussion_section = ""
@@ -363,8 +363,8 @@ Vote: 👍 / 👎 / 💬
 **Merged:** {merged_count} PRs | **Needs Review:** {review_count} PRs | **Help Wanted:** {help_count} issues
 
 ### 🚨 Attention Needed
-| Item | Why | Owner |
-|------|-----|-------|
+| Item | Description | Why | Owner |
+|------|-------------|-----|-------|
 {attention_table}
 
 ### 💬 Top Issues to Discuss
