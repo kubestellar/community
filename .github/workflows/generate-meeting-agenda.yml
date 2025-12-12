@@ -32,7 +32,7 @@ jobs:
         run: |
           # Calculate if this Thursday is a meeting week
           # Meetings are bi-weekly, starting from a reference date
-          REFERENCE_DATE="2026-01-08"  # A known meeting date (every other Thursday)
+          REFERENCE_DATE="2025-12-11"  # A known meeting date (every other Thursday)
           
           if [ -n "${{ github.event.inputs.meeting_date }}" ]; then
             # Manual trigger - use provided date
