@@ -146,10 +146,7 @@ jobs:
           Edit the agenda file directly in this PR, or comment below with items to add.
 
           ---
-          *This agenda was automatically generated from GitHub activity across KubeStellar repos.*" \
-              --label "meeting" \
-              --label "agenda" \
-              --assignee "${{ github.actor }}"
+          *This agenda was automatically generated from GitHub activity across KubeStellar repos.*"
           else
             echo "PR already exists: #$EXISTING_PR"
           fi
