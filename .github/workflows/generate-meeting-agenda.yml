@@ -1,0 +1,205 @@
+# .github/workflows/generate-meeting-agenda.yml
+#
+# This workflow automatically generates the community meeting agenda
+# and creates a PR/issue 3 days before each bi-weekly meeting.
+#
+# Meetings are every other Thursday at 10AM ET
+
+name: Generate Community Meeting Agenda
+
+on:
+  # Run every Tuesday at 12:00 UTC (3 days before Thursday meeting)
+  schedule:
+    - cron: '0 12 * * 2'  # Every Tuesday
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      meeting_date:
+        description: 'Meeting date (YYYY-MM-DD)'
+        required: true
+        type: string
+
+jobs:
+  check-if-meeting-week:
+    runs-on: ubuntu-latest
+    outputs:
+      is_meeting_week: ${{ steps.check.outputs.is_meeting_week }}
+      meeting_date: ${{ steps.check.outputs.meeting_date }}
+    steps:
+      - name: Check if this is a meeting week
+        id: check
+        run: |
+          # Calculate if this Thursday is a meeting week
+          # Meetings are bi-weekly, starting from a reference date
+          REFERENCE_DATE="2026-01-08"  # A known meeting date (every other Thursday)
+          
+          if [ -n "${{ github.event.inputs.meeting_date }}" ]; then
+            # Manual trigger - use provided date
+            MEETING_DATE="${{ github.event.inputs.meeting_date }}"
+            echo "is_meeting_week=true" >> $GITHUB_OUTPUT
+          else
+            # Calculate next Thursday
+            NEXT_THURSDAY=$(date -d "next Thursday" +%Y-%m-%d)
+            
+            # Calculate weeks since reference
+            REF_EPOCH=$(date -d "$REFERENCE_DATE" +%s)
+            NEXT_EPOCH=$(date -d "$NEXT_THURSDAY" +%s)
+            DIFF_DAYS=$(( (NEXT_EPOCH - REF_EPOCH) / 86400 ))
+            DIFF_WEEKS=$(( DIFF_DAYS / 7 ))
+            
+            # Check if even number of weeks (bi-weekly)
+            if [ $(( DIFF_WEEKS % 2 )) -eq 0 ]; then
+              echo "is_meeting_week=true" >> $GITHUB_OUTPUT
+              MEETING_DATE=$NEXT_THURSDAY
+            else
+              echo "is_meeting_week=false" >> $GITHUB_OUTPUT
+              # Calculate the following week
+              MEETING_DATE=$(date -d "$NEXT_THURSDAY + 7 days" +%Y-%m-%d)
+            fi
+          fi
+          
+          echo "meeting_date=$MEETING_DATE" >> $GITHUB_OUTPUT
+          echo "Meeting date will be: $MEETING_DATE"
+
+  generate-agenda:
+    needs: check-if-meeting-week
+    if: needs.check-if-meeting-week.outputs.is_meeting_week == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install PyGithub python-dateutil requests
+      
+      - name: Generate agenda
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MEETING_DATE: ${{ needs.check-if-meeting-week.outputs.meeting_date }}
+        run: |
+          python scripts/generate_agenda.py \
+            --meeting-date "$MEETING_DATE" \
+            --token "$GITHUB_TOKEN" \
+            --output "meetings/$(echo $MEETING_DATE | tr '-' '').md"
+      
+      - name: Create or update agenda file
+        run: |
+          MEETING_DATE="${{ needs.check-if-meeting-week.outputs.meeting_date }}"
+          AGENDA_FILE="meetings/$(echo $MEETING_DATE | tr '-' '').md"
+          
+          # Ensure meetings directory exists
+          mkdir -p meetings
+          
+          # Git config
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create branch
+          BRANCH="agenda-$MEETING_DATE"
+          git checkout -b $BRANCH
+          
+          # Commit changes
+          git add "$AGENDA_FILE"
+          git commit -m "📋 Generate agenda for $MEETING_DATE community meeting"
+          
+          # Push branch
+          git push origin $BRANCH --force
+      
+      - name: Create Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MEETING_DATE: ${{ needs.check-if-meeting-week.outputs.meeting_date }}
+        run: |
+          BRANCH="agenda-$MEETING_DATE"
+          
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+          
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create \
+              --title "📋 Community Meeting Agenda: $MEETING_DATE" \
+              --body "## Auto-generated Meeting Agenda
+
+This PR contains the auto-generated agenda for the **$MEETING_DATE** community meeting.
+
+### Before the meeting:
+- [ ] Add the **focus topic** for this meeting
+- [ ] Update the **upcoming events** section
+- [ ] Add any **demos** to the queue
+- [ ] Review and adjust **action items** from last meeting
+- [ ] Add any **shoutouts** for contributors
+
+### How to add items:
+Edit the agenda file directly in this PR, or comment below with items to add.
+
+---
+*This agenda was automatically generated from GitHub activity across KubeStellar repos.*" \
+              --label "meeting,agenda" \
+              --assignee "${{ github.actor }}"
+          else
+            echo "PR already exists: #$EXISTING_PR"
+          fi
+      
+      - name: Post to Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          MEETING_DATE: ${{ needs.check-if-meeting-week.outputs.meeting_date }}
+          GOOGLE_DOC_URL: "https://docs.google.com/document/d/1TmSKerQeuarA3AWgJJZmq1ZToUaoYVWMyR1ruB36-EE/edit"
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            PR_URL="https://github.com/${{ github.repository }}/pulls"
+            
+            curl -X POST "$SLACK_WEBHOOK" \
+              -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"📋 Community meeting agenda for $MEETING_DATE is ready!\",
+                \"blocks\": [
+                  {
+                    \"type\": \"header\",
+                    \"text\": {
+                      \"type\": \"plain_text\",
+                      \"text\": \"📋 KubeStellar Community Meeting - $MEETING_DATE\"
+                    }
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"Agenda auto-generated! Here's what to do:\"
+                    }
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*1️⃣ Add agenda items:* <$PR_URL|Review PR & comment>\\n*2️⃣ Join the meeting:* <$GOOGLE_DOC_URL|Google Doc>\"
+                    }
+                  },
+                  {
+                    \"type\": \"divider\"
+                  },
+                  {
+                    \"type\": \"context\",
+                    \"elements\": [
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"⏱️ 30 min | Thursday 10AM ET\"
+                      }
+                    ]
+                  }
+                ]
+              }"
+          fi
