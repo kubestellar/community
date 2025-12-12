@@ -236,22 +236,43 @@ class AgendaGenerator:
     
     def generate_agenda(self, meeting_date: str) -> str:
         """Generate the complete agenda."""
-        
+
         # Collect data from all repos
         all_merged_prs = []
         all_open_prs = []
         all_help_wanted = []
         all_contributors = set()
         repo_activity = {}  # Track activity per repo
-        
+        repo_metrics = {}  # Track detailed metrics per repo
+
         print("Fetching data from GitHub repos...")
         for repo in CONFIG["repos"]:
             print(f"  - {repo}")
-            all_merged_prs.extend(self.get_merged_prs(repo))
-            all_open_prs.extend(self.get_open_prs_needing_review(repo))
+            merged_prs = self.get_merged_prs(repo)
+            open_prs = self.get_open_prs_needing_review(repo)
+            contributors = self.get_recent_contributors(repo)
+            activity = self.get_repo_activity_score(repo)
+
+            all_merged_prs.extend(merged_prs)
+            all_open_prs.extend(open_prs)
             all_help_wanted.extend(self.get_help_wanted_issues(repo))
-            all_contributors.update(self.get_recent_contributors(repo))
-            repo_activity[repo] = self.get_repo_activity_score(repo)
+            all_contributors.update(contributors)
+            repo_activity[repo] = activity
+
+            # Track per-repo metrics
+            # Find top contributor (most merged PRs)
+            contributor_counts = {}
+            for pr in merged_prs:
+                contributor_counts[pr.author] = contributor_counts.get(pr.author, 0) + 1
+            top_contributor = max(contributor_counts.items(), key=lambda x: x[1])[0] if contributor_counts else None
+
+            repo_metrics[repo] = {
+                "merged_count": len(merged_prs),
+                "open_count": len(open_prs),
+                "activity": activity,
+                "top_contributor": top_contributor,
+                "contributor_prs": contributor_counts.get(top_contributor, 0) if top_contributor else 0,
+            }
         
         # Sort and limit
         all_merged_prs.sort(key=lambda x: x.merged_at or datetime.min, reverse=True)
@@ -288,14 +309,16 @@ class AgendaGenerator:
             release_info=release_info,
             next_meeting=next_meeting,
             top_issues_by_repo=top_issues_by_repo,
+            repo_metrics=repo_metrics,
         )
         
         return agenda
     
-    def _render_template(self, meeting_date: str, merged_prs: List[PRInfo], 
+    def _render_template(self, meeting_date: str, merged_prs: List[PRInfo],
                          open_prs: List[PRInfo], help_wanted: List[IssueInfo],
                          contributors: List[str], release_info: dict,
-                         next_meeting: str, top_issues_by_repo: dict = None) -> str:
+                         next_meeting: str, top_issues_by_repo: dict = None,
+                         repo_metrics: dict = None) -> str:
         """Render the compact 30-min agenda template."""
         
         # Counts
@@ -342,7 +365,38 @@ class AgendaGenerator:
         
         if not discussion_section:
             discussion_section = "\n_No active issues to highlight_\n"
-        
+
+        # Build per-repo metrics table with trend and top contributor
+        repo_metrics_section = ""
+        if repo_metrics:
+            # Calculate average activity for trend comparison
+            activities = [m["activity"] for m in repo_metrics.values()]
+            avg_activity = sum(activities) / len(activities) if activities else 0
+
+            repo_metrics_section = "| Repo | Merged | Open PRs | Trend | Top Contributor |\n"
+            repo_metrics_section += "|------|--------|----------|-------|----------------|\n"
+            for repo, metrics in repo_metrics.items():
+                repo_short = repo.split("/")[-1]
+                # Trend indicator based on activity relative to average
+                if metrics["activity"] > avg_activity * 1.2:
+                    trend = "📈"  # Above average
+                elif metrics["activity"] < avg_activity * 0.8:
+                    trend = "📉"  # Below average
+                else:
+                    trend = "➡️"  # Around average
+
+                # Top contributor
+                if metrics["top_contributor"]:
+                    contributor = f"@{metrics['top_contributor']} ({metrics['contributor_prs']} PRs)"
+                else:
+                    contributor = "-"
+
+                repo_metrics_section += f"| {repo_short} | {metrics['merged_count']} | {metrics['open_count']} | {trend} | {contributor} |\n"
+
+        # Calculate date range
+        lookback_start = (datetime.now() - timedelta(days=CONFIG["lookback_days"])).strftime("%Y-%m-%d")
+        lookback_end = datetime.now().strftime("%Y-%m-%d")
+
         template = f"""# KubeStellar Community Meeting
 ## 📅 {meeting_date} | {CONFIG["meeting_time"]} | ⏱️ 30 min
 
@@ -358,10 +412,12 @@ Vote: 👍 / 👎 / 💬
 ---
 
 ## 🔥 Repo Pulse (8 min)
-*Auto-generated {datetime.now().strftime("%Y-%m-%d")} | [Full PR list](https://github.com/kubestellar/kubestellar/pulls)*
+*Stats from {lookback_start} to {lookback_end} ({CONFIG["lookback_days"]} days) | [Full PR list](https://github.com/kubestellar/kubestellar/pulls)*
 
-**Merged:** {merged_count} PRs | **Needs Review:** {review_count} PRs | **Help Wanted:** {help_count} issues
+**Totals:** {merged_count} merged | {review_count} need review | {help_count} help wanted
 
+### 📊 Per-Repo Activity
+{repo_metrics_section}
 ### 🚨 Attention Needed
 | Item | Description | Why | Owner |
 |------|-------------|-----|-------|
